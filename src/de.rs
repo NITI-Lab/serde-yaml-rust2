@@ -82,7 +82,9 @@ fn visit_array<'de, V: Visitor<'de>>(array: Vec<Yaml>, path: Path, visitor: V) -
         index: 0,
         path: path.clone(),
     };
-    let value = visitor.visit_seq(&mut seq).map_err(|e: Error| e.with_path(&path))?;
+    let value = visitor
+        .visit_seq(&mut seq)
+        .map_err(|e: Error| e.with_path(&path))?;
     if seq.iter.len() == 0 {
         Ok(value)
     } else {
@@ -99,7 +101,9 @@ fn visit_hash<'de, V: Visitor<'de>>(hash: Hash, path: Path, visitor: V) -> Resul
         value: None,
         path: path.clone(),
     };
-    visitor.visit_map(&mut map).map_err(|e: Error| e.with_path(&path))
+    visitor
+        .visit_map(&mut map)
+        .map_err(|e: Error| e.with_path(&path))
 }
 
 impl<'de> de::Deserializer<'de> for Deserializer {
@@ -113,9 +117,13 @@ impl<'de> de::Deserializer<'de> for Deserializer {
             Yaml::Integer(i) => visitor.visit_i64(i).map_err(|e: Error| e.with_path(&path)),
             Yaml::Real(s) => match parse_real(&s) {
                 Some(f) => visitor.visit_f64(f).map_err(|e: Error| e.with_path(&path)),
-                None => visitor.visit_string(s).map_err(|e: Error| e.with_path(&path)),
+                None => visitor
+                    .visit_string(s)
+                    .map_err(|e: Error| e.with_path(&path)),
             },
-            Yaml::String(s) => visitor.visit_string(s).map_err(|e: Error| e.with_path(&path)),
+            Yaml::String(s) => visitor
+                .visit_string(s)
+                .map_err(|e: Error| e.with_path(&path)),
             Yaml::Array(a) => visit_array(a, path, visitor),
             Yaml::Hash(h) => visit_hash(h, path, visitor),
             Yaml::BadValue => Err(Error::bad_value(&path)),
@@ -127,7 +135,9 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         let path = self.path.clone();
         match self.yaml {
             Yaml::Null => visitor.visit_none().map_err(|e: Error| e.with_path(&path)),
-            _ => visitor.visit_some(self).map_err(|e: Error| e.with_path(&path)),
+            _ => visitor
+                .visit_some(self)
+                .map_err(|e: Error| e.with_path(&path)),
         }
     }
 
@@ -164,9 +174,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
                 }
                 let (key, value) = hash.into_iter().next().expect("length checked above");
                 let Yaml::String(variant) = key else {
-                    return Err(
-                        Error::new("expected a string enum variant name").with_path(&path)
-                    );
+                    return Err(Error::new("expected a string enum variant name").with_path(&path));
                 };
                 let mut child_path = path.clone();
                 child_path.push_key(variant.clone());
@@ -179,9 +187,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
                     .map_err(|e: Error| e.with_path(&path))
             }
             Yaml::BadValue => Err(Error::bad_value(&path)),
-            _ => Err(
-                Error::new("expected a string or single-key map for enum").with_path(&path),
-            ),
+            _ => Err(Error::new("expected a string or single-key map for enum").with_path(&path)),
         }
     }
 
@@ -288,10 +294,10 @@ impl VariantDeserializer {
     fn payload(self, expected: &'static str) -> Result<Deserializer> {
         match self.value {
             Some(yaml) => Ok(Deserializer::child(yaml, self.path)),
-            None => Err(Error::new(format!(
-                "expected {expected} but found a unit variant",
-            ))
-            .with_path(&self.path)),
+            None => Err(
+                Error::new(format!("expected {expected} but found a unit variant",))
+                    .with_path(&self.path),
+            ),
         }
     }
 }
@@ -302,9 +308,9 @@ impl<'de> VariantAccess<'de> for VariantDeserializer {
     fn unit_variant(self) -> Result<()> {
         match self.value {
             None | Some(Yaml::Null) => Ok(()),
-            Some(_) => Err(
-                Error::new("expected a unit variant but found a value").with_path(&self.path),
-            ),
+            Some(_) => {
+                Err(Error::new("expected a unit variant but found a value").with_path(&self.path))
+            }
         }
     }
 

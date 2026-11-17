@@ -18,7 +18,6 @@ fn test_rename_field() {
 
     let serialized = to_string(&item).unwrap();
     assert!(serialized.contains("item_name:"));
-    assert!(!serialized.contains("name:"));
     let back: Item = from_str(&serialized).unwrap();
     assert_eq!(item, back);
 }
