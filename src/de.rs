@@ -80,13 +80,13 @@ fn visit_array<'de, V: Visitor<'de>>(array: Vec<Yaml>, path: Path, visitor: V) -
     let mut seq = SeqDeserializer {
         iter: array.into_iter(),
         index: 0,
-        path,
+        path: path.clone(),
     };
-    let value = visitor.visit_seq(&mut seq)?;
+    let value = visitor.visit_seq(&mut seq).map_err(|e: Error| e.with_path(&path))?;
     if seq.iter.len() == 0 {
         Ok(value)
     } else {
-        Err(Error::invalid_length(len, &"fewer elements in sequence"))
+        Err(Error::invalid_length(len, &"fewer elements in sequence").with_path(&path))
     }
 }
 
@@ -97,35 +97,37 @@ fn visit_hash<'de, V: Visitor<'de>>(hash: Hash, path: Path, visitor: V) -> Resul
         remaining,
         label: String::new(),
         value: None,
-        path,
+        path: path.clone(),
     };
-    visitor.visit_map(&mut map)
+    visitor.visit_map(&mut map).map_err(|e: Error| e.with_path(&path))
 }
 
 impl<'de> de::Deserializer<'de> for Deserializer {
     type Error = Error;
 
     fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
-        match self.yaml {
-            Yaml::Null => visitor.visit_unit(),
-            Yaml::Boolean(b) => visitor.visit_bool(b),
-            Yaml::Integer(i) => visitor.visit_i64(i),
+        let Self { yaml, path } = self;
+        match yaml {
+            Yaml::Null => visitor.visit_unit().map_err(|e: Error| e.with_path(&path)),
+            Yaml::Boolean(b) => visitor.visit_bool(b).map_err(|e: Error| e.with_path(&path)),
+            Yaml::Integer(i) => visitor.visit_i64(i).map_err(|e: Error| e.with_path(&path)),
             Yaml::Real(s) => match parse_real(&s) {
-                Some(f) => visitor.visit_f64(f),
-                None => visitor.visit_string(s),
+                Some(f) => visitor.visit_f64(f).map_err(|e: Error| e.with_path(&path)),
+                None => visitor.visit_string(s).map_err(|e: Error| e.with_path(&path)),
             },
-            Yaml::String(s) => visitor.visit_string(s),
-            Yaml::Array(a) => visit_array(a, self.path, visitor),
-            Yaml::Hash(h) => visit_hash(h, self.path, visitor),
-            Yaml::BadValue => Err(Error::bad_value(&self.path)),
-            Yaml::Alias(_) => Err(Error::new("unresolved YAML alias")),
+            Yaml::String(s) => visitor.visit_string(s).map_err(|e: Error| e.with_path(&path)),
+            Yaml::Array(a) => visit_array(a, path, visitor),
+            Yaml::Hash(h) => visit_hash(h, path, visitor),
+            Yaml::BadValue => Err(Error::bad_value(&path)),
+            Yaml::Alias(_) => Err(Error::new("unresolved YAML alias").with_path(&path)),
         }
     }
 
     fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        let path = self.path.clone();
         match self.yaml {
-            Yaml::Null => visitor.visit_none(),
-            _ => visitor.visit_some(self),
+            Yaml::Null => visitor.visit_none().map_err(|e: Error| e.with_path(&path)),
+            _ => visitor.visit_some(self).map_err(|e: Error| e.with_path(&path)),
         }
     }
 
@@ -143,40 +145,43 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         _variants: &'static [&'static str],
         visitor: V,
     ) -> Result<V::Value> {
-        match self.yaml {
-            Yaml::String(variant) => visitor.visit_enum(EnumDeserializer {
-                variant,
-                value: None,
-                path: self.path,
-            }),
+        let Self { yaml, path } = self;
+        match yaml {
+            Yaml::String(variant) => visitor
+                .visit_enum(EnumDeserializer {
+                    variant,
+                    value: None,
+                    path: path.clone(),
+                })
+                .map_err(|e: Error| e.with_path(&path)),
             Yaml::Hash(hash) => {
                 if hash.len() != 1 {
                     return Err(Error::new(format!(
-                        "expected a map with exactly one key for enum at {}, found {} keys",
-                        self.path,
+                        "expected a map with exactly one key for enum, found {} keys",
                         hash.len()
-                    )));
+                    ))
+                    .with_path(&path));
                 }
                 let (key, value) = hash.into_iter().next().expect("length checked above");
                 let Yaml::String(variant) = key else {
-                    return Err(Error::new(format!(
-                        "expected a string enum variant name at {}",
-                        self.path
-                    )));
+                    return Err(
+                        Error::new("expected a string enum variant name").with_path(&path)
+                    );
                 };
-                let mut path = self.path;
-                path.push_key(variant.clone());
-                visitor.visit_enum(EnumDeserializer {
-                    variant,
-                    value: Some(value),
-                    path,
-                })
+                let mut child_path = path.clone();
+                child_path.push_key(variant.clone());
+                visitor
+                    .visit_enum(EnumDeserializer {
+                        variant,
+                        value: Some(value),
+                        path: child_path,
+                    })
+                    .map_err(|e: Error| e.with_path(&path))
             }
-            Yaml::BadValue => Err(Error::bad_value(&self.path)),
-            _ => Err(Error::new(format!(
-                "expected a string or single-key map for enum at {}",
-                self.path
-            ))),
+            Yaml::BadValue => Err(Error::bad_value(&path)),
+            _ => Err(
+                Error::new("expected a string or single-key map for enum").with_path(&path),
+            ),
         }
     }
 
@@ -284,9 +289,9 @@ impl VariantDeserializer {
         match self.value {
             Some(yaml) => Ok(Deserializer::child(yaml, self.path)),
             None => Err(Error::new(format!(
-                "expected {expected} but found a unit variant at {}",
-                self.path
-            ))),
+                "expected {expected} but found a unit variant",
+            ))
+            .with_path(&self.path)),
         }
     }
 }
@@ -297,10 +302,9 @@ impl<'de> VariantAccess<'de> for VariantDeserializer {
     fn unit_variant(self) -> Result<()> {
         match self.value {
             None | Some(Yaml::Null) => Ok(()),
-            Some(_) => Err(Error::new(format!(
-                "expected a unit variant but found a value at {}",
-                self.path
-            ))),
+            Some(_) => Err(
+                Error::new("expected a unit variant but found a value").with_path(&self.path),
+            ),
         }
     }
 

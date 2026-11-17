@@ -31,18 +31,18 @@ pub type Sequence = Vec<Value>;
 /// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Value {
-    ///     /// A YAML null (`null`, `~`, or an empty value). This is the default.
+    /// A YAML null (`null`, `~`, or an empty value). This is the default.
     #[default]
     Null,
-    ///     /// A YAML boolean (`true` or `false`).
+    /// A YAML boolean (`true` or `false`).
     Bool(bool),
-    ///     /// A YAML number: an integer or a floating point value.
+    /// A YAML number: an integer or a floating point value.
     Number(Number),
-    ///     /// A YAML string.
+    /// A YAML string.
     String(String),
-    ///     /// A YAML sequence (list) of values.
+    /// A YAML sequence (list) of values.
     Sequence(Sequence),
-    ///     /// A YAML mapping (key/value pairs) that preserves insertion order.
+    /// A YAML mapping (key/value pairs) that preserves insertion order.
     Mapping(Mapping),
 }
 
@@ -323,6 +323,74 @@ macro_rules! from_number {
 }
 
 from_number!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64);
+
+/// Compares a [`Value`] with a string slice.
+///
+/// Returns `true` only if the value is [`Value::String`] and its contents
+/// match the given slice.
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_yaml_rust2::Value;
+///
+/// assert_eq!(Value::from("hello"), "hello");
+/// assert_ne!(Value::from(42), "42");
+/// ```
+impl PartialEq<&str> for Value {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == Some(*other)
+    }
+}
+
+/// Compares a [`Value`] with a [`str`].
+impl PartialEq<str> for Value {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == Some(other)
+    }
+}
+
+/// Compares a [`Value`] with a [`bool`].
+///
+/// Returns `true` only if the value is [`Value::Bool`] with the same truth value.
+impl PartialEq<bool> for Value {
+    fn eq(&self, other: &bool) -> bool {
+        self.as_bool() == Some(*other)
+    }
+}
+
+/// Compares a [`Value`] with an [`i64`].
+///
+/// Returns `true` only if the value is a [`Value::Number`] representable as `i64`
+/// with the same value.
+impl PartialEq<i64> for Value {
+    fn eq(&self, other: &i64) -> bool {
+        self.as_i64() == Some(*other)
+    }
+}
+
+/// Compares a [`Value`] with a [`u64`].
+///
+/// Returns `true` only if the value is a [`Value::Number`] representable as `u64`
+/// with the same value.
+impl PartialEq<u64> for Value {
+    fn eq(&self, other: &u64) -> bool {
+        self.as_u64() == Some(*other)
+    }
+}
+
+/// Compares a [`Value`] with an [`f64`] using exact bit equality.
+///
+/// NaN compares equal to NaN (unlike normal `f64` equality). Two floats that
+/// differ only by representation (e.g. `0.0` and `-0.0`) are **not** equal.
+impl PartialEq<f64> for Value {
+    fn eq(&self, other: &f64) -> bool {
+        match self.as_f64() {
+            Some(v) => v.to_bits() == other.to_bits(),
+            None => false,
+        }
+    }
+}
 
 /// Collects an iterator of convertible items into a [`Value::Sequence`].
 ///

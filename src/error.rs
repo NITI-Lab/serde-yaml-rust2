@@ -36,19 +36,23 @@ impl fmt::Display for Location {
 /// An error that occurred during YAML serialization or deserialization.
 ///
 /// Parse errors carry a [`Location`] indicating where in the input the
-/// problem was detected.
+/// problem was detected. Deserialization errors may also carry a YAML path
+/// (e.g. `.foo.bar[0]`) showing where in the document structure the problem
+/// occurred.
 #[derive(Debug)]
 pub struct Error {
     message: String,
     location: Option<Location>,
+    path: Option<String>,
 }
 
 impl Error {
-    /// Create an error with a message and no location.
+    /// Create an error with a message and no location or path.
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
             location: None,
+            path: None,
         }
     }
 
@@ -63,6 +67,23 @@ impl Error {
         self.location.as_ref()
     }
 
+    /// The YAML path where the error occurred (e.g. `.foo.bar[0]`), if available.
+    ///
+    /// The path describes the position within the document's structure,
+    /// while [`location`](Self::location) describes the byte position in the
+    /// input string.
+    pub fn path(&self) -> Option<&str> {
+        self.path.as_deref()
+    }
+
+    /// Attach a YAML path to this error, unless it already has one.
+    pub(crate) fn with_path(mut self, path: &crate::path::Path) -> Self {
+        if self.path.is_none() {
+            self.path = Some(path.to_string());
+        }
+        self
+    }
+
     pub(crate) fn scan(err: yaml_rust2::ScanError) -> Self {
         let marker = err.marker();
         Self {
@@ -71,6 +92,7 @@ impl Error {
                 line: marker.line() + 1,
                 column: marker.col() + 1,
             }),
+            path: None,
         }
     }
 
@@ -89,10 +111,11 @@ impl Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(loc) = &self.location {
-            write!(f, "{}: {}", loc, self.message)
-        } else {
-            write!(f, "{}", self.message)
+        match (&self.location, &self.path) {
+            (Some(loc), Some(path)) => write!(f, "{}, at {}: {}", loc, path, self.message),
+            (Some(loc), None) => write!(f, "{}: {}", loc, self.message),
+            (None, Some(path)) => write!(f, "at {}: {}", path, self.message),
+            (None, None) => write!(f, "{}", self.message),
         }
     }
 }
