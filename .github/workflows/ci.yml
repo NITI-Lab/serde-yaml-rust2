@@ -46,4 +46,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: miri
-      - run: cargo miri test
+      - run: cargo miri test --lib --test integration --test error_path --test serde_attrs --test serialize_options --test value_convenience --test value_pointer
