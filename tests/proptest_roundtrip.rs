@@ -231,14 +231,15 @@ fn arb_value() -> impl Strategy<Value = Value> {
         |inner| {
             prop_oneof![
                 prop::collection::vec(inner.clone(), 0..5).prop_map(Value::Sequence),
-                prop::collection::vec((safe_key().prop_map(Value::String), inner), 0..5)
-                    .prop_map(|pairs| {
+                prop::collection::vec((safe_key().prop_map(Value::String), inner), 0..5).prop_map(
+                    |pairs| {
                         let mut m = Mapping::new();
                         for (k, v) in pairs {
                             m.insert(k, v);
                         }
                         Value::Mapping(m)
-                    }),
+                    },
+                ),
             ]
         },
     )

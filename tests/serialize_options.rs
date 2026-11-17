@@ -1,11 +1,7 @@
 use serde::Serialize;
-use serde_yaml_rust2::{to_string, to_string_with_options, to_writer_with_options, SerializeOptions};
-
-#[derive(Serialize)]
-struct Point {
-    x: f64,
-    y: f64,
-}
+use serde_yaml_rust2::{
+    to_string, to_string_with_options, to_writer_with_options, SerializeOptions,
+};
 
 #[derive(Serialize)]
 struct Config {

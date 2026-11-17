@@ -11,14 +11,8 @@ fn pointer_nested_mapping() {
 #[test]
 fn pointer_sequence_index() {
     let v: Value = from_str("items:\n  - name: first\n  - name: second").unwrap();
-    assert_eq!(
-        v.pointer("/items/0/name"),
-        Some(&Value::from("first"))
-    );
-    assert_eq!(
-        v.pointer("/items/1/name"),
-        Some(&Value::from("second"))
-    );
+    assert_eq!(v.pointer("/items/0/name"), Some(&Value::from("first")));
+    assert_eq!(v.pointer("/items/1/name"), Some(&Value::from("second")));
 }
 
 #[test]
@@ -77,16 +71,14 @@ fn pointer_mut_missing_returns_none() {
 fn mapping_entry_insert_or_update() {
     let mut m = Mapping::new();
 
-    m.entry(Value::from("count"))
-        .or_insert(Value::from(0));
+    m.entry(Value::from("count")).or_insert(Value::from(0));
     assert_eq!(m.get(&Value::from("count")), Some(&Value::from(0)));
 
-    m.entry(Value::from("count"))
-        .and_modify(|v| {
-            if let Some(n) = v.as_i64() {
-                *v = Value::from(n + 1);
-            }
-        });
+    m.entry(Value::from("count")).and_modify(|v| {
+        if let Some(n) = v.as_i64() {
+            *v = Value::from(n + 1);
+        }
+    });
     assert_eq!(m.get(&Value::from("count")), Some(&Value::from(1)));
 }
 
@@ -122,8 +114,7 @@ fn mapping_merge_empty() {
 
 #[test]
 fn deep_merge_nested_mappings() {
-    let mut base: Value =
-        from_str("server:\n  host: localhost\n  port: 8080\nname: app").unwrap();
+    let mut base: Value = from_str("server:\n  host: localhost\n  port: 8080\nname: app").unwrap();
     let patch: Value = from_str("server:\n  port: 9090\n  tls: true\nversion: 2").unwrap();
 
     base.deep_merge(patch);
