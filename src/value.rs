@@ -48,6 +48,10 @@ pub enum Value {
 
 static NULL: Value = Value::Null;
 
+fn unescape_pointer_token(token: &str) -> String {
+    token.replace("~1", "/").replace("~0", "~")
+}
+
 fn de_err(msg: impl Display) -> Error {
     <Error as de::Error>::custom(msg)
 }
@@ -207,6 +211,126 @@ impl Value {
         match self {
             Value::Mapping(m) => Some(m),
             _ => None,
+        }
+    }
+
+    /// Look up a nested value using a JSON Pointer string ([RFC 6901]).
+    ///
+    /// A pointer is a sequence of `/`-separated tokens. Each token indexes
+    /// into a mapping by string key or into a sequence by integer index.
+    /// The escapes `~1` → `/` and `~0` → `~` are applied per RFC 6901.
+    ///
+    /// Returns `None` if any step along the path is missing or the value is
+    /// not the right kind of container.
+    ///
+    /// [RFC 6901]: https://tools.ietf.org/html/rfc6901
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use serde_yaml_rust2::Value;
+    ///
+    /// let v: Value = serde_yaml_rust2::from_str("a:\n  b:\n    c: 42").unwrap();
+    /// assert_eq!(v.pointer("/a/b/c"), Some(&Value::from(42)));
+    /// assert_eq!(v.pointer("/a/missing"), None);
+    /// assert_eq!(v.pointer(""), Some(&v));
+    /// ```
+    pub fn pointer(&self, path: &str) -> Option<&Value> {
+        if path.is_empty() {
+            return Some(self);
+        }
+        if !path.starts_with('/') {
+            return None;
+        }
+        let mut current = self;
+        for token in path[1..].split('/') {
+            let unescaped = unescape_pointer_token(token);
+            match current {
+                Value::Mapping(m) => {
+                    current = m.get(&Value::String(unescaped))?;
+                }
+                Value::Sequence(s) => {
+                    let idx: usize = token.parse().ok()?;
+                    current = s.get(idx)?;
+                }
+                _ => return None,
+            }
+        }
+        Some(current)
+    }
+
+    /// Like [`pointer`](Value::pointer), but returns a mutable reference.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use serde_yaml_rust2::Value;
+    ///
+    /// let mut v: Value = serde_yaml_rust2::from_str("a:\n  b: 1").unwrap();
+    /// *v.pointer_mut("/a/b").unwrap() = Value::from(99);
+    /// assert_eq!(v.pointer("/a/b"), Some(&Value::from(99)));
+    /// ```
+    pub fn pointer_mut(&mut self, path: &str) -> Option<&mut Value> {
+        if path.is_empty() {
+            return Some(self);
+        }
+        if !path.starts_with('/') {
+            return None;
+        }
+        let mut current = self;
+        for token in path[1..].split('/') {
+            let unescaped = unescape_pointer_token(token);
+            current = match current {
+                Value::Mapping(m) => m.get_mut(&Value::String(unescaped))?,
+                Value::Sequence(s) => {
+                    let idx: usize = token.parse().ok()?;
+                    s.get_mut(idx)?
+                }
+                _ => return None,
+            };
+        }
+        Some(current)
+    }
+
+    /// Recursively merge `other` into `self`.
+    ///
+    /// - If both are mappings, each key from `other` is recursively merged
+    ///   into the corresponding key of `self`.
+    /// - If both are sequences, `other`'s elements are appended to `self`.
+    /// - Otherwise, `self` is replaced by `other`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use serde_yaml_rust2::Value;
+    ///
+    /// let mut base: Value = serde_yaml_rust2::from_str("a: 1\nb: 2").unwrap();
+    /// let patch: Value = serde_yaml_rust2::from_str("b: 99\nc: 3").unwrap();
+    /// base.deep_merge(patch);
+    /// assert_eq!(base["b"].as_i64(), Some(99));
+    /// assert_eq!(base["c"].as_i64(), Some(3));
+    /// assert_eq!(base["a"].as_i64(), Some(1));
+    /// ```
+    pub fn deep_merge(&mut self, other: Value) {
+        match (self, other) {
+            (Value::Mapping(base), Value::Mapping(other)) => {
+                for (k, v) in other {
+                    match base.entry(k) {
+                        indexmap::map::Entry::Occupied(mut e) => {
+                            e.get_mut().deep_merge(v);
+                        }
+                        indexmap::map::Entry::Vacant(e) => {
+                            e.insert(v);
+                        }
+                    }
+                }
+            }
+            (Value::Sequence(base), Value::Sequence(other)) => {
+                base.extend(other);
+            }
+            (this, other) => {
+                *this = other;
+            }
         }
     }
 

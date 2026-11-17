@@ -48,7 +48,7 @@ pub use de::Deserializer;
 pub use error::{Error, Location, Result};
 pub use mapping::Mapping;
 pub use number::Number;
-pub use ser::Serializer;
+pub use ser::{SerializeOptions, Serializer};
 pub use value::{Sequence, Value};
 
 /// Deserialize a `T` from a YAML string.
@@ -124,6 +124,23 @@ where
     T: serde::Serialize,
 {
     ser::to_writer(writer, value)
+}
+
+/// Serialize `T` into a YAML string using the given [`SerializeOptions`].
+pub fn to_string_with_options<T>(value: &T, options: &SerializeOptions) -> Result<String>
+where
+    T: serde::Serialize,
+{
+    ser::to_string_with_options(value, options)
+}
+
+/// Serialize `T` as YAML into `writer` using the given [`SerializeOptions`].
+pub fn to_writer_with_options<W, T>(writer: W, value: &T, options: &SerializeOptions) -> Result<()>
+where
+    W: std::io::Write,
+    T: serde::Serialize,
+{
+    ser::to_writer_with_options(writer, value, options)
 }
 
 /// Convert a [`Value`] into a typed value `T`.

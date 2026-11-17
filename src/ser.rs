@@ -4,20 +4,131 @@ use yaml_rust2::{Yaml, YamlEmitter};
 
 use crate::error::{Error, Result};
 
+/// Options for controlling YAML serialization output.
+///
+/// Use the builder methods to customise the output format, then pass the
+/// options to [`to_string_with_options`] or [`to_writer_with_options`].
+///
+/// ```rust
+/// use serde_yaml_rust2::SerializeOptions;
+///
+/// let opts = SerializeOptions::new()
+///     .indent(4)
+///     .document_start(true);
+/// ```
+#[derive(Clone, Debug)]
+pub struct SerializeOptions {
+    indent: usize,
+    flow_sequences: bool,
+    flow_mappings: bool,
+    document_start: bool,
+}
+
+impl SerializeOptions {
+    /// Create options with the default settings.
+    ///
+    /// Defaults: 2-space indent, block style (no flow), no document-start
+    /// marker.
+    pub fn new() -> Self {
+        Self {
+            indent: 2,
+            flow_sequences: false,
+            flow_mappings: false,
+            document_start: false,
+        }
+    }
+
+    /// Set the indentation width in spaces (default: 2).
+    pub fn indent(mut self, n: usize) -> Self {
+        self.indent = n;
+        self
+    }
+
+    /// Emit short, all-scalar sequences in flow style (`[1, 2, 3]`).
+    ///
+    /// **Note:** yaml-rust2 does not expose a flow-style toggle yet, so this
+    /// option is accepted and stored but has no effect on the output at this
+    /// time.
+    pub fn flow_sequences(mut self, yes: bool) -> Self {
+        self.flow_sequences = yes;
+        self
+    }
+
+    /// Emit short, all-scalar mappings in flow style (`{a: 1, b: 2}`).
+    ///
+    /// **Note:** yaml-rust2 does not expose a flow-style toggle yet, so this
+    /// option is accepted and stored but has no effect on the output at this
+    /// time.
+    pub fn flow_mappings(mut self, yes: bool) -> Self {
+        self.flow_mappings = yes;
+        self
+    }
+
+    /// Emit a `---` document-start marker (default: `false`).
+    pub fn document_start(mut self, yes: bool) -> Self {
+        self.document_start = yes;
+        self
+    }
+}
+
+impl Default for SerializeOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn reindent(yaml: &str, target: usize) -> String {
+    const BASE: usize = 2;
+    if target == BASE {
+        return yaml.to_owned();
+    }
+    let mut result = String::with_capacity(yaml.len());
+    for (i, line) in yaml.lines().enumerate() {
+        if i > 0 {
+            result.push('\n');
+        }
+        let spaces = line.len() - line.trim_start().len();
+        if spaces == 0 {
+            result.push_str(line);
+        } else {
+            let level = spaces / BASE;
+            let remainder = spaces % BASE;
+            for _ in 0..(level * target + remainder) {
+                result.push(' ');
+            }
+            result.push_str(line.trim_start());
+        }
+    }
+    result
+}
+
 /// Serialize `T` into a YAML string without a leading `---` document marker.
 pub fn to_string<T: ?Sized + Serialize>(value: &T) -> Result<String> {
+    to_string_with_options(value, &SerializeOptions::default())
+}
+
+/// Serialize `T` into a YAML string using the given [`SerializeOptions`].
+pub fn to_string_with_options<T: ?Sized + Serialize>(
+    value: &T,
+    options: &SerializeOptions,
+) -> Result<String> {
     let yaml = value.serialize(Serializer)?;
     let mut out = String::new();
     YamlEmitter::new(&mut out)
         .dump(&yaml)
         .map_err(Error::emit)?;
 
-    let body = out.strip_prefix("---").unwrap_or(&out);
-    let body = body
-        .strip_prefix('\n')
-        .or_else(|| body.strip_prefix(' '))
-        .unwrap_or(body);
-    let mut result = body.to_owned();
+    let body = if options.document_start {
+        out.as_str()
+    } else {
+        let stripped = out.strip_prefix("---").unwrap_or(&out);
+        stripped
+            .strip_prefix('\n')
+            .or_else(|| stripped.strip_prefix(' '))
+            .unwrap_or(stripped)
+    };
+
+    let mut result = reindent(body, options.indent);
     if !result.ends_with('\n') {
         result.push('\n');
     }
@@ -25,8 +136,17 @@ pub fn to_string<T: ?Sized + Serialize>(value: &T) -> Result<String> {
 }
 
 /// Serialize `T` as YAML and write it into `writer`.
-pub fn to_writer<W: std::io::Write, T: ?Sized + Serialize>(mut writer: W, value: &T) -> Result<()> {
-    let text = to_string(value)?;
+pub fn to_writer<W: std::io::Write, T: ?Sized + Serialize>(writer: W, value: &T) -> Result<()> {
+    to_writer_with_options(writer, value, &SerializeOptions::default())
+}
+
+/// Serialize `T` as YAML into `writer` using the given [`SerializeOptions`].
+pub fn to_writer_with_options<W: std::io::Write, T: ?Sized + Serialize>(
+    mut writer: W,
+    value: &T,
+    options: &SerializeOptions,
+) -> Result<()> {
+    let text = to_string_with_options(value, options)?;
     writer
         .write_all(text.as_bytes())
         .map_err(|e| Error::new(e.to_string()))

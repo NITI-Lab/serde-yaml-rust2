@@ -133,6 +133,35 @@ impl Mapping {
         self.map.entry(k)
     }
 
+    /// Shallow-merges all entries from `other` into `self`.
+    ///
+    /// Keys already present in `self` are overwritten with `other`'s values.
+    /// New keys are appended in the order they appear in `other`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use serde_yaml_rust2::{Mapping, Value};
+    ///
+    /// let mut base = Mapping::new();
+    /// base.insert(Value::from("a"), Value::from(1));
+    /// base.insert(Value::from("b"), Value::from(2));
+    ///
+    /// let mut patch = Mapping::new();
+    /// patch.insert(Value::from("b"), Value::from(99));
+    /// patch.insert(Value::from("c"), Value::from(3));
+    ///
+    /// base.merge(patch);
+    /// assert_eq!(base.get(&Value::from("a")), Some(&Value::from(1)));
+    /// assert_eq!(base.get(&Value::from("b")), Some(&Value::from(99)));
+    /// assert_eq!(base.get(&Value::from("c")), Some(&Value::from(3)));
+    /// ```
+    pub fn merge(&mut self, other: Mapping) {
+        for (k, v) in other {
+            self.map.insert(k, v);
+        }
+    }
+
     pub(crate) fn from_yaml_hash(hash: yaml_rust2::yaml::Hash) -> Self {
         let mut map = IndexMap::with_capacity(hash.len());
         for (k, v) in hash {
