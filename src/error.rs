@@ -68,7 +68,6 @@ impl Error {
     pub(crate) fn end_of_stream() -> Self {
         Self::new("EOF while parsing a value")
     }
-
 }
 
 impl fmt::Display for Error {

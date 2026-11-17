@@ -23,7 +23,6 @@ impl Path {
     pub(crate) fn push_key(&mut self, key: String) {
         self.segments.push(PathSegment::Key(key));
     }
-
 }
 
 impl fmt::Display for Path {
