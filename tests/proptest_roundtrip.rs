@@ -55,6 +55,29 @@ proptest! {
         let back: String = from_str(&yaml).unwrap();
         prop_assert_eq!(val, back);
     }
+
+    #[test]
+    fn any_string_round_trip(val in any::<String>()) {
+        let yaml = to_string(&val).unwrap();
+        let back: String = from_str(&yaml).unwrap();
+        prop_assert_eq!(val, back);
+    }
+
+    #[test]
+    fn yamlish_string_round_trip(val in "[-?:#&*!|>'\"%@` \n\t,\\[\\]{}a0.~]{0,12}") {
+        let yaml = to_string(&val).unwrap();
+        let back: String = from_str(&yaml).unwrap();
+        prop_assert_eq!(&val, &back);
+        let mut m = HashMap::new();
+        m.insert(val.clone(), val.clone());
+        let yaml = to_string(&m).unwrap();
+        let back: HashMap<String, String> = from_str(&yaml).unwrap();
+        prop_assert_eq!(m, back);
+        let seq = vec![val.clone(), val];
+        let yaml = to_string(&seq).unwrap();
+        let back: Vec<String> = from_str(&yaml).unwrap();
+        prop_assert_eq!(seq, back);
+    }
 }
 
 // ── Struct round-trip ──

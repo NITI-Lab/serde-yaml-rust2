@@ -1,7 +1,8 @@
 use serde::ser::{self, Serialize};
 use yaml_rust2::yaml::Hash;
-use yaml_rust2::{Yaml, YamlEmitter};
+use yaml_rust2::Yaml;
 
+use crate::emit::Emitter;
 use crate::error::{Error, Result};
 
 /// Options for controlling YAML serialization output.
@@ -38,27 +39,24 @@ impl SerializeOptions {
         }
     }
 
-    /// Set the indentation width in spaces (default: 2).
+    /// Set the indentation width in spaces (default: 2, minimum: 1).
+    ///
+    /// Nested mappings and sequences are indented by this width. The
+    /// contents of a sequence item always start right after its `- `.
     pub fn indent(mut self, n: usize) -> Self {
         self.indent = n;
         self
     }
 
-    /// Emit short, all-scalar sequences in flow style (`[1, 2, 3]`).
-    ///
-    /// **Note:** yaml-rust2 does not expose a flow-style toggle yet, so this
-    /// option is accepted and stored but has no effect on the output at this
-    /// time.
+    /// Emit sequences whose items are all single-line scalars in flow style
+    /// (`[1, 2, 3]`).
     pub fn flow_sequences(mut self, yes: bool) -> Self {
         self.flow_sequences = yes;
         self
     }
 
-    /// Emit short, all-scalar mappings in flow style (`{a: 1, b: 2}`).
-    ///
-    /// **Note:** yaml-rust2 does not expose a flow-style toggle yet, so this
-    /// option is accepted and stored but has no effect on the output at this
-    /// time.
+    /// Emit mappings whose keys and values are all single-line scalars in
+    /// flow style (`{a: 1, b: 2}`).
     pub fn flow_mappings(mut self, yes: bool) -> Self {
         self.flow_mappings = yes;
         self
@@ -77,31 +75,6 @@ impl Default for SerializeOptions {
     }
 }
 
-fn reindent(yaml: &str, target: usize) -> String {
-    const BASE: usize = 2;
-    if target == BASE {
-        return yaml.to_owned();
-    }
-    let mut result = String::with_capacity(yaml.len());
-    for (i, line) in yaml.lines().enumerate() {
-        if i > 0 {
-            result.push('\n');
-        }
-        let spaces = line.len() - line.trim_start().len();
-        if spaces == 0 {
-            result.push_str(line);
-        } else {
-            let level = spaces / BASE;
-            let remainder = spaces % BASE;
-            for _ in 0..(level * target + remainder) {
-                result.push(' ');
-            }
-            result.push_str(line.trim_start());
-        }
-    }
-    result
-}
-
 /// Serialize `T` into a YAML string without a leading `---` document marker.
 pub fn to_string<T: ?Sized + Serialize>(value: &T) -> Result<String> {
     to_string_with_options(value, &SerializeOptions::default())
@@ -114,25 +87,17 @@ pub fn to_string_with_options<T: ?Sized + Serialize>(
 ) -> Result<String> {
     let yaml = value.serialize(Serializer)?;
     let mut out = String::new();
-    YamlEmitter::new(&mut out)
-        .dump(&yaml)
-        .map_err(Error::emit)?;
-
-    let body = if options.document_start {
-        out.as_str()
-    } else {
-        let stripped = out.strip_prefix("---").unwrap_or(&out);
-        stripped
-            .strip_prefix('\n')
-            .or_else(|| stripped.strip_prefix(' '))
-            .unwrap_or(stripped)
-    };
-
-    let mut result = reindent(body, options.indent);
-    if !result.ends_with('\n') {
-        result.push('\n');
+    if options.document_start {
+        out.push_str("---\n");
     }
-    Ok(result)
+    Emitter::new(
+        &mut out,
+        options.indent,
+        options.flow_sequences,
+        options.flow_mappings,
+    )
+    .document(&yaml)?;
+    Ok(out)
 }
 
 /// Serialize `T` as YAML and write it into `writer`.

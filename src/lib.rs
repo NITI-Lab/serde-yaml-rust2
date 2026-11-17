@@ -37,6 +37,7 @@
 #![forbid(unsafe_code)]
 
 mod de;
+mod emit;
 mod error;
 mod mapping;
 mod number;
@@ -112,7 +113,7 @@ where
 /// The output does not include a `---` document start marker.
 pub fn to_string<T>(value: &T) -> Result<String>
 where
-    T: serde::Serialize,
+    T: ?Sized + serde::Serialize,
 {
     ser::to_string(value)
 }
@@ -121,7 +122,7 @@ where
 pub fn to_writer<W, T>(writer: W, value: &T) -> Result<()>
 where
     W: std::io::Write,
-    T: serde::Serialize,
+    T: ?Sized + serde::Serialize,
 {
     ser::to_writer(writer, value)
 }
@@ -129,7 +130,7 @@ where
 /// Serialize `T` into a YAML string using the given [`SerializeOptions`].
 pub fn to_string_with_options<T>(value: &T, options: &SerializeOptions) -> Result<String>
 where
-    T: serde::Serialize,
+    T: ?Sized + serde::Serialize,
 {
     ser::to_string_with_options(value, options)
 }
@@ -138,7 +139,7 @@ where
 pub fn to_writer_with_options<W, T>(writer: W, value: &T, options: &SerializeOptions) -> Result<()>
 where
     W: std::io::Write,
-    T: serde::Serialize,
+    T: ?Sized + serde::Serialize,
 {
     ser::to_writer_with_options(writer, value, options)
 }
@@ -154,7 +155,7 @@ where
 /// Convert a typed value `T` into a [`Value`].
 pub fn to_value<T>(value: &T) -> Result<Value>
 where
-    T: serde::Serialize,
+    T: ?Sized + serde::Serialize,
 {
     value.serialize(value::ValueSerializer)
 }

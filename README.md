@@ -22,7 +22,7 @@ Add to your `Cargo.toml`:
 ```toml
 [dependencies]
 serde = { version = "1", features = ["derive"] }
-serde-yaml-rust2 = "0.1"
+serde-yaml-rust2 = "0.5"
 ```
 
 ### Serialize and Deserialize structs
@@ -119,10 +119,27 @@ fn main() -> serde_yaml_rust2::Result<()> {
 | `from_str(s)` | Deserialize from a YAML string |
 | `from_slice(v)` | Deserialize from a UTF-8 byte slice |
 | `from_reader(rdr)` | Deserialize from any `Read` |
+| `from_str_multidoc(s)` | Deserialize every `---`-separated document into a `Vec` |
 | `to_string(value)` | Serialize to a YAML string |
 | `to_writer(writer, value)` | Serialize to any `Write` |
+| `to_string_with_options(value, opts)` | Serialize with `SerializeOptions` (indent, flow style, `---` marker) |
 | `from_value(value)` | Convert a `Value` to a typed value |
 | `to_value(value)` | Convert a typed value to a `Value` |
+
+### Output format
+
+`to_string` writes block-style YAML meant to be read and edited by people:
+
+- Strings are written plain when that reads back as the same string (`url: http://localhost:8080`, `path: /users/{id}`), single-quoted when they would otherwise mean something else (`'true'`, `'123'`, `'a: b'`, and YAML 1.1 booleans such as `'yes'`), and double-quoted with escapes when they contain control characters.
+- Multi-line strings are written as `|` literal blocks.
+- `None` / unit is written as `null`.
+- Nested sequences are indented under their key (`tags:\n  - a`).
+
+### Compatibility with serde_yaml
+
+- Plain numbers and booleans are accepted where a string is expected, so `port: 8080` reads into a `String` and `200:` reads as a string map key (e.g. OpenAPI `responses`).
+- An empty input (or one with only comments) reads as `null`.
+- Duplicate keys in a mapping are an error, as the YAML spec requires.
 
 ### Types
 

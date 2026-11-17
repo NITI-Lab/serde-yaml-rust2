@@ -87,25 +87,18 @@ impl Error {
     pub(crate) fn scan(err: yaml_rust2::ScanError) -> Self {
         let marker = err.marker();
         Self {
-            message: err.to_string(),
+            message: err.info().to_owned(),
+            // yaml-rust2 lines are already 1-based; columns are 0-based.
             location: Some(Location {
-                line: marker.line() + 1,
+                line: marker.line(),
                 column: marker.col() + 1,
             }),
             path: None,
         }
     }
 
-    pub(crate) fn emit(err: yaml_rust2::EmitError) -> Self {
-        Self::new(err.to_string())
-    }
-
     pub(crate) fn bad_value(path: &crate::path::Path) -> Self {
         Self::new(format!("bad YAML value at {path}"))
-    }
-
-    pub(crate) fn end_of_stream() -> Self {
-        Self::new("EOF while parsing a value")
     }
 }
 

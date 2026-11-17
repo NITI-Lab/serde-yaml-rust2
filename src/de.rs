@@ -12,10 +12,11 @@ use crate::path::Path;
 /// Deserialize a `T` from a YAML string.
 ///
 /// Only the first document in the string is used. For multi-document
-/// input see [`Deserializer::from_str_documents`].
+/// input see [`Deserializer::from_str_documents`]. Input without any
+/// document (empty, or only comments) reads as `null`.
 pub fn from_str<T: DeserializeOwned>(s: &str) -> Result<T> {
     let docs = YamlLoader::load_from_str(s).map_err(Error::scan)?;
-    let doc = docs.into_iter().next().ok_or_else(Error::end_of_stream)?;
+    let doc = docs.into_iter().next().unwrap_or(Yaml::Null);
     T::deserialize(Deserializer::new(doc))
 }
 
@@ -195,10 +196,32 @@ impl<'de> de::Deserializer<'de> for Deserializer {
         visitor.visit_unit()
     }
 
+    /// Plain numbers and booleans are accepted where a string is expected
+    /// (`port: 8080` into a `String`, `200:` as a map key), like serde_yaml.
+    fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        let Self { yaml, path } = self;
+        let text = match yaml {
+            Yaml::Integer(i) => i.to_string(),
+            Yaml::Real(s) => s,
+            Yaml::Boolean(b) => b.to_string(),
+            other => return Self { yaml: other, path }.deserialize_any(visitor),
+        };
+        visitor
+            .visit_string(text)
+            .map_err(|e: Error| e.with_path(&path))
+    }
+
+    fn deserialize_string<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.deserialize_str(visitor)
+    }
+
+    fn deserialize_identifier<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
+        self.deserialize_str(visitor)
+    }
+
     forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
+        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char
         bytes byte_buf unit unit_struct seq tuple tuple_struct map struct
-        identifier
     }
 }
 
