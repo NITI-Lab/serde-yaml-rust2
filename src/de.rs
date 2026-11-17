@@ -9,18 +9,27 @@ use yaml_rust2::{Yaml, YamlLoader};
 use crate::error::{Error, Result};
 use crate::path::Path;
 
+/// Deserialize a `T` from a YAML string.
+///
+/// Only the first document in the string is used. For multi-document
+/// input see [`Deserializer::from_str_documents`].
 pub fn from_str<T: DeserializeOwned>(s: &str) -> Result<T> {
     let docs = YamlLoader::load_from_str(s).map_err(Error::scan)?;
     let doc = docs.into_iter().next().ok_or_else(Error::end_of_stream)?;
     T::deserialize(Deserializer::new(doc))
 }
 
+/// A serde [`Deserializer`](serde::Deserializer) backed by a yaml-rust2 `Yaml` value.
+///
+/// Construct one from a [`Yaml`] node with [`Deserializer::new`], or parse
+/// multiple documents with [`Deserializer::from_str_documents`].
 pub struct Deserializer {
     yaml: Yaml,
     path: Path,
 }
 
 impl Deserializer {
+    /// Create a deserializer from a pre-parsed [`Yaml`] node.
     pub fn new(yaml: Yaml) -> Self {
         Self {
             yaml,
@@ -30,6 +39,20 @@ impl Deserializer {
 
     fn child(yaml: Yaml, path: Path) -> Self {
         Self { yaml, path }
+    }
+
+    /// Create one `Deserializer` per YAML document in the string.
+    ///
+    /// Documents are separated by `---`. An empty string yields no documents.
+    pub fn from_str_documents(s: &str) -> Result<Vec<Deserializer>> {
+        let docs = YamlLoader::load_from_str(s).map_err(Error::scan)?;
+        Ok(docs
+            .into_iter()
+            .map(|yaml| Deserializer {
+                yaml,
+                path: Path::new(),
+            })
+            .collect())
     }
 }
 

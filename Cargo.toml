@@ -1,6 +1,6 @@
 [package]
 name = "serde-yaml-rust2"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.85"
 description = "YAML serialization/deserialization built on yaml-rust2 — a safe, pure-Rust, YAML 1.2 serde integration"

@@ -374,3 +374,58 @@ fn null_variants() {
         assert!(v.is_null(), "expected null for input: {}", input);
     }
 }
+
+#[test]
+fn error_has_location_for_invalid_yaml() {
+    let yaml = "valid: true\n  bad indent";
+    let err = serde_yaml_rust2::from_str::<Value>(yaml).unwrap_err();
+    let loc = err.location().expect("should have location");
+    assert!(loc.line() >= 1);
+    assert!(loc.column() >= 1);
+}
+
+#[test]
+fn error_display_includes_location() {
+    let yaml = ":\n  bad";
+    let err = serde_yaml_rust2::from_str::<Value>(yaml).unwrap_err();
+    let msg = err.to_string();
+    // Error message should contain line/col info from Display impl
+    assert!(msg.contains(':'), "error should contain location separator: {}", msg);
+}
+
+#[test]
+fn multi_document_deserialize() {
+    let yaml = "---\nname: first\n---\nname: second\n---\nname: third\n";
+    let docs: Vec<std::collections::HashMap<String, String>> =
+        serde_yaml_rust2::from_str_multidoc(yaml).unwrap();
+    assert_eq!(docs.len(), 3);
+    assert_eq!(docs[0]["name"], "first");
+    assert_eq!(docs[1]["name"], "second");
+    assert_eq!(docs[2]["name"], "third");
+}
+
+#[test]
+fn multi_document_single() {
+    let yaml = "hello: world\n";
+    let docs: Vec<Value> = serde_yaml_rust2::from_str_multidoc(yaml).unwrap();
+    assert_eq!(docs.len(), 1);
+}
+
+#[test]
+fn multi_document_empty() {
+    let yaml = "";
+    let docs: Vec<Value> = serde_yaml_rust2::from_str_multidoc(yaml).unwrap();
+    assert_eq!(docs.len(), 0);
+}
+
+#[test]
+fn multi_document_typed() {
+    #[derive(Debug, Deserialize, PartialEq)]
+    struct Item {
+        id: u32,
+    }
+
+    let yaml = "---\nid: 1\n---\nid: 2\n";
+    let items: Vec<Item> = serde_yaml_rust2::from_str_multidoc(yaml).unwrap();
+    assert_eq!(items, vec![Item { id: 1 }, Item { id: 2 }]);
+}

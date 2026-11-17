@@ -4,6 +4,7 @@ use yaml_rust2::{Yaml, YamlEmitter};
 
 use crate::error::{Error, Result};
 
+/// Serialize `T` into a YAML string without a leading `---` document marker.
 pub fn to_string<T: ?Sized + Serialize>(value: &T) -> Result<String> {
     let yaml = value.serialize(Serializer)?;
     let mut out = String::new();
@@ -23,6 +24,7 @@ pub fn to_string<T: ?Sized + Serialize>(value: &T) -> Result<String> {
     Ok(result)
 }
 
+/// Serialize `T` as YAML and write it into `writer`.
 pub fn to_writer<W: std::io::Write, T: ?Sized + Serialize>(mut writer: W, value: &T) -> Result<()> {
     let text = to_string(value)?;
     writer
@@ -30,6 +32,9 @@ pub fn to_writer<W: std::io::Write, T: ?Sized + Serialize>(mut writer: W, value:
         .map_err(|e| Error::new(e.to_string()))
 }
 
+/// A serde [`Serializer`](serde::Serializer) that produces a yaml-rust2 `Yaml` value.
+///
+/// Normally used indirectly through [`to_string`] or [`to_writer`].
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Serializer;
 

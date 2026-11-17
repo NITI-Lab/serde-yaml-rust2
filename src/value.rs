@@ -11,16 +11,38 @@ use std::fmt::{self, Display};
 use std::ops;
 use yaml_rust2::Yaml;
 
+/// A YAML sequence: an ordered list of [`Value`]s.
 pub type Sequence = Vec<Value>;
 
+/// Any valid YAML value.
+///
+/// A `Value` is a dynamically typed representation of a YAML node. It can be
+/// produced by deserializing into `Value`, built by hand, or converted from
+/// Rust primitives via `From`.
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_yaml_rust2::Value;
+///
+/// let v: Value = serde_yaml_rust2::from_str("a: [1, 2, 3]").unwrap();
+/// assert_eq!(v["a"][1].as_i64(), Some(2));
+/// assert!(v["missing"].is_null());
+/// ```
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub enum Value {
+    ///     /// A YAML null (`null`, `~`, or an empty value). This is the default.
     #[default]
     Null,
+    ///     /// A YAML boolean (`true` or `false`).
     Bool(bool),
+    ///     /// A YAML number: an integer or a floating point value.
     Number(Number),
+    ///     /// A YAML string.
     String(String),
+    ///     /// A YAML sequence (list) of values.
     Sequence(Sequence),
+    ///     /// A YAML mapping (key/value pairs) that preserves insertion order.
     Mapping(Mapping),
 }
 
@@ -35,38 +57,79 @@ fn ser_err(msg: impl Display) -> Error {
 }
 
 impl Value {
+    /// Index into a sequence or mapping, returning `None` if the index is out of
+    /// bounds, the key is absent, or the value is not the right kind of container.
+    ///
+    /// Use a `usize` to index a sequence and a `&str`/`String` to look up a string
+    /// key in a mapping.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use serde_yaml_rust2::Value;
+    ///
+    /// let v: Value = serde_yaml_rust2::from_str("k: [10, 20]").unwrap();
+    /// assert_eq!(v.get("k").and_then(|s| s.get(0)), Some(&Value::from(10)));
+    /// assert_eq!(v.get("nope"), None);
+    /// ```
     pub fn get<I: ValueIndex>(&self, index: I) -> Option<&Value> {
         index.index_into(self)
     }
 
+    /// Like [`get`](Value::get), but returns a mutable reference.
     pub fn get_mut<I: ValueIndex>(&mut self, index: I) -> Option<&mut Value> {
         index.index_into_mut(self)
     }
 
+    /// Returns `true` if the value is [`Value::Null`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use serde_yaml_rust2::Value;
+    ///
+    /// assert!(Value::Null.is_null());
+    /// assert!(!Value::Bool(false).is_null());
+    /// ```
     pub fn is_null(&self) -> bool {
         matches!(self, Value::Null)
     }
 
+    /// Returns `true` if the value is a [`Value::Bool`].
     pub fn is_bool(&self) -> bool {
         matches!(self, Value::Bool(_))
     }
 
+    /// Returns `true` if the value is a [`Value::Number`].
     pub fn is_number(&self) -> bool {
         matches!(self, Value::Number(_))
     }
 
+    /// Returns `true` if the value is a [`Value::String`].
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use serde_yaml_rust2::Value;
+    ///
+    /// assert!(Value::from("hi").is_string());
+    /// assert!(!Value::from(1).is_string());
+    /// ```
     pub fn is_string(&self) -> bool {
         matches!(self, Value::String(_))
     }
 
+    /// Returns `true` if the value is a [`Value::Sequence`].
     pub fn is_sequence(&self) -> bool {
         matches!(self, Value::Sequence(_))
     }
 
+    /// Returns `true` if the value is a [`Value::Mapping`].
     pub fn is_mapping(&self) -> bool {
         matches!(self, Value::Mapping(_))
     }
 
+    /// Returns the boolean if the value is a [`Value::Bool`], otherwise `None`.
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             Value::Bool(b) => Some(*b),
@@ -74,6 +137,7 @@ impl Value {
         }
     }
 
+    /// Returns the value as an `i64` if it is a number representable as one, otherwise `None`.
     pub fn as_i64(&self) -> Option<i64> {
         match self {
             Value::Number(n) => n.as_i64(),
@@ -81,6 +145,7 @@ impl Value {
         }
     }
 
+    /// Returns the value as a `u64` if it is a non-negative integer, otherwise `None`.
     pub fn as_u64(&self) -> Option<u64> {
         match self {
             Value::Number(n) => n.as_u64(),
@@ -88,6 +153,7 @@ impl Value {
         }
     }
 
+    /// Returns the value as an `f64` if it is a number, otherwise `None`.
     pub fn as_f64(&self) -> Option<f64> {
         match self {
             Value::Number(n) => n.as_f64(),
@@ -95,6 +161,16 @@ impl Value {
         }
     }
 
+    /// Returns the string slice if the value is a [`Value::String`], otherwise `None`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use serde_yaml_rust2::Value;
+    ///
+    /// assert_eq!(Value::from("hello").as_str(), Some("hello"));
+    /// assert_eq!(Value::Null.as_str(), None);
+    /// ```
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Value::String(s) => Some(s),
@@ -102,6 +178,7 @@ impl Value {
         }
     }
 
+    /// Returns a reference to the sequence if the value is a [`Value::Sequence`], otherwise `None`.
     pub fn as_sequence(&self) -> Option<&Sequence> {
         match self {
             Value::Sequence(s) => Some(s),
@@ -109,6 +186,7 @@ impl Value {
         }
     }
 
+    /// Returns a mutable reference to the sequence if the value is a [`Value::Sequence`], otherwise `None`.
     pub fn as_sequence_mut(&mut self) -> Option<&mut Sequence> {
         match self {
             Value::Sequence(s) => Some(s),
@@ -116,6 +194,7 @@ impl Value {
         }
     }
 
+    /// Returns a reference to the mapping if the value is a [`Value::Mapping`], otherwise `None`.
     pub fn as_mapping(&self) -> Option<&Mapping> {
         match self {
             Value::Mapping(m) => Some(m),
@@ -123,6 +202,7 @@ impl Value {
         }
     }
 
+    /// Returns a mutable reference to the mapping if the value is a [`Value::Mapping`], otherwise `None`.
     pub fn as_mapping_mut(&mut self) -> Option<&mut Mapping> {
         match self {
             Value::Mapping(m) => Some(m),
@@ -157,6 +237,7 @@ impl Value {
     }
 }
 
+/// Converts a `yaml_rust2` node into a [`Value`]. `BadValue` and aliases become `Null`.
 impl From<Yaml> for Value {
     fn from(yaml: Yaml) -> Self {
         match yaml {
@@ -171,6 +252,7 @@ impl From<Yaml> for Value {
     }
 }
 
+/// Converts a [`Value`] into a `yaml_rust2` node.
 impl From<Value> for Yaml {
     fn from(value: Value) -> Self {
         match value {
@@ -187,36 +269,42 @@ impl From<Value> for Yaml {
     }
 }
 
+/// Creates a [`Value::Bool`].
 impl From<bool> for Value {
     fn from(v: bool) -> Self {
         Value::Bool(v)
     }
 }
 
+/// Creates a [`Value::String`].
 impl From<String> for Value {
     fn from(v: String) -> Self {
         Value::String(v)
     }
 }
 
+/// Creates a [`Value::String`] by copying the slice.
 impl From<&str> for Value {
     fn from(v: &str) -> Self {
         Value::String(v.to_owned())
     }
 }
 
+/// Creates a [`Value::Number`].
 impl From<Number> for Value {
     fn from(v: Number) -> Self {
         Value::Number(v)
     }
 }
 
+/// Creates a [`Value::Sequence`].
 impl From<Sequence> for Value {
     fn from(v: Sequence) -> Self {
         Value::Sequence(v)
     }
 }
 
+/// Creates a [`Value::Mapping`].
 impl From<Mapping> for Value {
     fn from(v: Mapping) -> Self {
         Value::Mapping(v)
@@ -225,6 +313,7 @@ impl From<Mapping> for Value {
 
 macro_rules! from_number {
     ($($t:ty),*) => {$(
+        /// Creates a [`Value::Number`] from a primitive numeric type.
         impl From<$t> for Value {
             fn from(v: $t) -> Self {
                 Value::Number(Number::from(v))
@@ -235,6 +324,16 @@ macro_rules! from_number {
 
 from_number!(i8, i16, i32, i64, isize, u8, u16, u32, u64, usize, f32, f64);
 
+/// Collects an iterator of convertible items into a [`Value::Sequence`].
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_yaml_rust2::Value;
+///
+/// let v: Value = (1..=3).collect();
+/// assert_eq!(v.as_sequence().unwrap().len(), 3);
+/// ```
 impl<T: Into<Value>> FromIterator<T> for Value {
     fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
         Value::Sequence(iter.into_iter().map(Into::into).collect())
@@ -249,6 +348,12 @@ mod private {
     impl<T: ?Sized + Sealed> Sealed for &T {}
 }
 
+/// A type that can be used to index into a [`Value`].
+///
+/// Implemented for `usize` (sequence index) and `str`/`String` (mapping key),
+/// plus references to those. The trait is sealed and cannot be implemented
+/// outside this crate. It is used by [`Value::get`], [`Value::get_mut`] and the
+/// `[]` operator.
 pub trait ValueIndex: private::Sealed {
     #[doc(hidden)]
     fn index_into<'v>(&self, v: &'v Value) -> Option<&'v Value>;
@@ -345,6 +450,20 @@ impl<T: ?Sized + ValueIndex> ValueIndex for &T {
     }
 }
 
+/// Index into a [`Value`] with `[]`.
+///
+/// Never panics: a missing key, out-of-range index, or index into a value of
+/// the wrong kind yields [`Value::Null`].
+///
+/// # Examples
+///
+/// ```rust
+/// use serde_yaml_rust2::Value;
+///
+/// let v: Value = serde_yaml_rust2::from_str("a: {b: 1}").unwrap();
+/// assert_eq!(v["a"]["b"].as_i64(), Some(1));
+/// assert!(v["x"]["y"].is_null());
+/// ```
 impl<I: ValueIndex> ops::Index<I> for Value {
     type Output = Value;
 
@@ -353,6 +472,12 @@ impl<I: ValueIndex> ops::Index<I> for Value {
     }
 }
 
+/// Mutably index into a [`Value`] with `[]`.
+///
+/// # Panics
+///
+/// Panics if the index is out of bounds, the key is missing, or the value is
+/// not a container of the matching kind.
 impl<I: ValueIndex> ops::IndexMut<I> for Value {
     fn index_mut(&mut self, index: I) -> &mut Value {
         index.index_or_insert(self)
