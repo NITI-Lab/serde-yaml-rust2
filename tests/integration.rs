@@ -377,7 +377,7 @@ fn null_variants() {
 
 #[test]
 fn error_has_location_for_invalid_yaml() {
-    let yaml = "valid: true\n  bad indent";
+    let yaml = "a: [unterminated";
     let err = serde_yaml_rust2::from_str::<Value>(yaml).unwrap_err();
     let loc = err.location().expect("should have location");
     assert!(loc.line() >= 1);
@@ -386,11 +386,14 @@ fn error_has_location_for_invalid_yaml() {
 
 #[test]
 fn error_display_includes_location() {
-    let yaml = ":\n  bad";
+    let yaml = "a: {unterminated";
     let err = serde_yaml_rust2::from_str::<Value>(yaml).unwrap_err();
     let msg = err.to_string();
-    // Error message should contain line/col info from Display impl
-    assert!(msg.contains(':'), "error should contain location separator: {}", msg);
+    assert!(
+        msg.contains("line"),
+        "error should contain location info: {}",
+        msg
+    );
 }
 
 #[test]
