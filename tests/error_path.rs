@@ -2,11 +2,13 @@ use serde::Deserialize;
 use serde_yaml_rust2::Value;
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct Outer {
     inner: Inner,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct Inner {
     value: u32,
 }
@@ -38,6 +40,7 @@ fn missing_field_includes_path() {
 #[test]
 fn error_in_sequence_element_includes_index() {
     #[derive(Debug, Deserialize)]
+    #[allow(dead_code)]
     struct List {
         items: Vec<Inner>,
     }

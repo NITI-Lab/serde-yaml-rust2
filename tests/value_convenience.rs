@@ -40,14 +40,14 @@ fn value_from_u64() {
 
 #[test]
 fn value_from_f64() {
-    let v = Value::from(3.14f64);
-    assert_eq!(v, Value::Number(Number::from(3.14f64)));
+    let v = Value::from(2.5f64);
+    assert_eq!(v, Value::Number(Number::from(2.5f64)));
 }
 
 #[test]
 fn value_from_number() {
     let n = Number::from(99i64);
-    let v = Value::from(n.clone());
+    let v = Value::from(n);
     assert_eq!(v, Value::Number(n));
 }
 
@@ -119,7 +119,7 @@ fn as_i64_returns_some_for_integer() {
 
 #[test]
 fn as_i64_returns_none_for_float() {
-    assert_eq!(Value::from(3.14f64).as_i64(), None);
+    assert_eq!(Value::from(2.5f64).as_i64(), None);
 }
 
 #[test]
@@ -282,8 +282,8 @@ fn partial_eq_u64_negative_value() {
 
 #[test]
 fn partial_eq_f64() {
-    assert_eq!(Value::from(3.14f64), 3.14f64);
-    assert_ne!(Value::from(3.14f64), 3.15f64);
+    assert_eq!(Value::from(2.5f64), 2.5f64);
+    assert_ne!(Value::from(2.5f64), 2.6f64);
 }
 
 #[test]
@@ -310,7 +310,7 @@ fn partial_eq_f64_infinity() {
 
 #[test]
 fn partial_eq_f64_non_number_value() {
-    assert_ne!(Value::from("3.14"), 3.14f64);
+    assert_ne!(Value::from("2.5"), 2.5f64);
 }
 
 // ── Index operations ──
