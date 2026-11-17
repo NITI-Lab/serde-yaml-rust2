@@ -7,7 +7,9 @@ use crate::error::{Error, Result};
 pub fn to_string<T: ?Sized + Serialize>(value: &T) -> Result<String> {
     let yaml = value.serialize(Serializer)?;
     let mut out = String::new();
-    YamlEmitter::new(&mut out).dump(&yaml).map_err(Error::emit)?;
+    YamlEmitter::new(&mut out)
+        .dump(&yaml)
+        .map_err(Error::emit)?;
 
     let body = out.strip_prefix("---").unwrap_or(&out);
     let body = body

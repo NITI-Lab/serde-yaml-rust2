@@ -52,11 +52,7 @@ fn key_label(key: &Yaml) -> String {
     }
 }
 
-fn visit_array<'de, V: Visitor<'de>>(
-    array: Vec<Yaml>,
-    path: Path,
-    visitor: V,
-) -> Result<V::Value> {
+fn visit_array<'de, V: Visitor<'de>>(array: Vec<Yaml>, path: Path, visitor: V) -> Result<V::Value> {
     let len = array.len();
     let mut seq = SeqDeserializer {
         iter: array.into_iter(),

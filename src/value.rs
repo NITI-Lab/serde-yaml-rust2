@@ -278,7 +278,10 @@ impl ValueIndex for usize {
             Value::Sequence(s) => {
                 let len = s.len();
                 s.get_mut(*self).unwrap_or_else(|| {
-                    panic!("index {} out of bounds for sequence of length {}", self, len)
+                    panic!(
+                        "index {} out of bounds for sequence of length {}",
+                        self, len
+                    )
                 })
             }
             other => panic!("cannot index into YAML {} with {}", other.type_name(), self),
@@ -533,7 +536,10 @@ where
     if access.iter.len() == 0 {
         Ok(out)
     } else {
-        Err(de::Error::invalid_length(len, &"fewer elements in sequence"))
+        Err(de::Error::invalid_length(
+            len,
+            &"fewer elements in sequence",
+        ))
     }
 }
 
@@ -682,14 +688,13 @@ impl<'de> Deserializer<'de> for Value {
             Value::String(s) => (s, None),
             Value::Mapping(map) => {
                 let mut iter = map.into_iter();
-                let (key, value) = match iter.next() {
-                    Some(entry) => entry,
-                    None => {
-                        return Err(de_err(
+                let (key, value) =
+                    match iter.next() {
+                        Some(entry) => entry,
+                        None => return Err(de_err(
                             "expected a mapping with a single key for enum, found an empty mapping",
-                        ))
-                    }
-                };
+                        )),
+                    };
                 if iter.next().is_some() {
                     return Err(de_err(
                         "expected a mapping with a single key for enum, found multiple keys",
@@ -807,7 +812,9 @@ impl Serializer for ValueSerializer {
     }
 
     fn serialize_bytes(self, v: &[u8]) -> Result<Value> {
-        Ok(Value::Sequence(v.iter().copied().map(Value::from).collect()))
+        Ok(Value::Sequence(
+            v.iter().copied().map(Value::from).collect(),
+        ))
     }
 
     fn serialize_none(self) -> Result<Value> {
@@ -987,7 +994,10 @@ impl ser::SerializeTupleVariant for SerializeTupleVariant {
 
     fn end(self) -> Result<Value> {
         let mut map = Mapping::with_capacity(1);
-        map.insert(Value::String(self.name.to_owned()), Value::Sequence(self.vec));
+        map.insert(
+            Value::String(self.name.to_owned()),
+            Value::Sequence(self.vec),
+        );
         Ok(Value::Mapping(map))
     }
 }
@@ -1080,7 +1090,10 @@ impl ser::SerializeStructVariant for SerializeStructVariant {
 
     fn end(self) -> Result<Value> {
         let mut map = Mapping::with_capacity(1);
-        map.insert(Value::String(self.name.to_owned()), Value::Mapping(self.map));
+        map.insert(
+            Value::String(self.name.to_owned()),
+            Value::Mapping(self.map),
+        );
         Ok(Value::Mapping(map))
     }
 }

@@ -69,9 +69,6 @@ impl Error {
         Self::new("EOF while parsing a value")
     }
 
-    pub(crate) fn more_than_one_document() -> Self {
-        Self::new("deserializing from YAML containing more than one document is not supported")
-    }
 }
 
 impl fmt::Display for Error {

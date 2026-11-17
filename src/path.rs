@@ -24,9 +24,6 @@ impl Path {
         self.segments.push(PathSegment::Key(key));
     }
 
-    pub(crate) fn pop(&mut self) {
-        self.segments.pop();
-    }
 }
 
 impl fmt::Display for Path {

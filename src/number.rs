@@ -163,7 +163,11 @@ impl Display for Number {
                 if v.is_nan() {
                     f.write_str(".nan")
                 } else if v.is_infinite() {
-                    f.write_str(if v.is_sign_negative() { "-.inf" } else { ".inf" })
+                    f.write_str(if v.is_sign_negative() {
+                        "-.inf"
+                    } else {
+                        ".inf"
+                    })
                 } else {
                     f.write_str(ryu::Buffer::new().format_finite(v))
                 }
