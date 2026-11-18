@@ -3,10 +3,10 @@ use serde::de::{
     SeqAccess, VariantAccess, Visitor,
 };
 use serde::forward_to_deserialize_any;
-use yaml_rust2::yaml::Hash;
-use yaml_rust2::{Yaml, YamlLoader};
+use yaml_rust2::Yaml;
 
 use crate::error::{Error, Result};
+use crate::load::{load_from_str, Node};
 use crate::path::Path;
 
 /// Deserialize a `T` from a YAML string.
@@ -15,17 +15,17 @@ use crate::path::Path;
 /// input see [`Deserializer::from_str_documents`]. Input without any
 /// document (empty, or only comments) reads as `null`.
 pub fn from_str<T: DeserializeOwned>(s: &str) -> Result<T> {
-    let docs = YamlLoader::load_from_str(s).map_err(Error::scan)?;
-    let doc = docs.into_iter().next().unwrap_or(Yaml::Null);
-    T::deserialize(Deserializer::new(doc))
+    let docs = load_from_str(s).map_err(Error::scan)?;
+    let doc = docs.into_iter().next().unwrap_or(Node::Null);
+    T::deserialize(Deserializer::child(doc, Path::new()))
 }
 
-/// A serde [`Deserializer`](serde::Deserializer) backed by a yaml-rust2 `Yaml` value.
+/// A serde [`Deserializer`](serde::Deserializer) backed by a YAML node tree.
 ///
 /// Construct one from a [`Yaml`] node with [`Deserializer::new`], or parse
 /// multiple documents with [`Deserializer::from_str_documents`].
 pub struct Deserializer {
-    yaml: Yaml,
+    yaml: Node,
     path: Path,
 }
 
@@ -33,12 +33,12 @@ impl Deserializer {
     /// Create a deserializer from a pre-parsed [`Yaml`] node.
     pub fn new(yaml: Yaml) -> Self {
         Self {
-            yaml,
+            yaml: Node::from(yaml),
             path: Path::new(),
         }
     }
 
-    fn child(yaml: Yaml, path: Path) -> Self {
+    fn child(yaml: Node, path: Path) -> Self {
         Self { yaml, path }
     }
 
@@ -46,7 +46,7 @@ impl Deserializer {
     ///
     /// Documents are separated by `---`. An empty string yields no documents.
     pub fn from_str_documents(s: &str) -> Result<Vec<Deserializer>> {
-        let docs = YamlLoader::load_from_str(s).map_err(Error::scan)?;
+        let docs = load_from_str(s).map_err(Error::scan)?;
         Ok(docs
             .into_iter()
             .map(|yaml| Deserializer {
@@ -66,17 +66,16 @@ fn parse_real(s: &str) -> Option<f64> {
     }
 }
 
-fn key_label(key: &Yaml) -> String {
+fn key_label(key: &Node) -> String {
     match key {
-        Yaml::String(s) | Yaml::Real(s) => s.clone(),
-        Yaml::Integer(i) => i.to_string(),
-        Yaml::Boolean(b) => b.to_string(),
-        Yaml::Null => "null".to_owned(),
+        Node::Str(s) | Node::Real(s) | Node::Int(_, s) => s.clone(),
+        Node::Bool(b) => b.to_string(),
+        Node::Null => "null".to_owned(),
         _ => "?".to_owned(),
     }
 }
 
-fn visit_array<'de, V: Visitor<'de>>(array: Vec<Yaml>, path: Path, visitor: V) -> Result<V::Value> {
+fn visit_array<'de, V: Visitor<'de>>(array: Vec<Node>, path: Path, visitor: V) -> Result<V::Value> {
     let len = array.len();
     let mut seq = SeqDeserializer {
         iter: array.into_iter(),
@@ -93,7 +92,11 @@ fn visit_array<'de, V: Visitor<'de>>(array: Vec<Yaml>, path: Path, visitor: V) -
     }
 }
 
-fn visit_hash<'de, V: Visitor<'de>>(hash: Hash, path: Path, visitor: V) -> Result<V::Value> {
+fn visit_hash<'de, V: Visitor<'de>>(
+    hash: Vec<(Node, Node)>,
+    path: Path,
+    visitor: V,
+) -> Result<V::Value> {
     let remaining = hash.len();
     let mut map = MapDeserializer {
         iter: hash.into_iter(),
@@ -113,29 +116,28 @@ impl<'de> de::Deserializer<'de> for Deserializer {
     fn deserialize_any<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         let Self { yaml, path } = self;
         match yaml {
-            Yaml::Null => visitor.visit_unit().map_err(|e: Error| e.with_path(&path)),
-            Yaml::Boolean(b) => visitor.visit_bool(b).map_err(|e: Error| e.with_path(&path)),
-            Yaml::Integer(i) => visitor.visit_i64(i).map_err(|e: Error| e.with_path(&path)),
-            Yaml::Real(s) => match parse_real(&s) {
+            Node::Null => visitor.visit_unit().map_err(|e: Error| e.with_path(&path)),
+            Node::Bool(b) => visitor.visit_bool(b).map_err(|e: Error| e.with_path(&path)),
+            Node::Int(i, _) => visitor.visit_i64(i).map_err(|e: Error| e.with_path(&path)),
+            Node::Real(s) => match parse_real(&s) {
                 Some(f) => visitor.visit_f64(f).map_err(|e: Error| e.with_path(&path)),
                 None => visitor
                     .visit_string(s)
                     .map_err(|e: Error| e.with_path(&path)),
             },
-            Yaml::String(s) => visitor
+            Node::Str(s) => visitor
                 .visit_string(s)
                 .map_err(|e: Error| e.with_path(&path)),
-            Yaml::Array(a) => visit_array(a, path, visitor),
-            Yaml::Hash(h) => visit_hash(h, path, visitor),
-            Yaml::BadValue => Err(Error::bad_value(&path)),
-            Yaml::Alias(_) => Err(Error::new("unresolved YAML alias").with_path(&path)),
+            Node::Seq(a) => visit_array(a, path, visitor),
+            Node::Map(h) => visit_hash(h, path, visitor),
+            Node::Bad => Err(Error::bad_value(&path)),
         }
     }
 
     fn deserialize_option<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         let path = self.path.clone();
         match self.yaml {
-            Yaml::Null => visitor.visit_none().map_err(|e: Error| e.with_path(&path)),
+            Node::Null => visitor.visit_none().map_err(|e: Error| e.with_path(&path)),
             _ => visitor
                 .visit_some(self)
                 .map_err(|e: Error| e.with_path(&path)),
@@ -158,14 +160,14 @@ impl<'de> de::Deserializer<'de> for Deserializer {
     ) -> Result<V::Value> {
         let Self { yaml, path } = self;
         match yaml {
-            Yaml::String(variant) => visitor
+            Node::Str(variant) => visitor
                 .visit_enum(EnumDeserializer {
                     variant,
                     value: None,
                     path: path.clone(),
                 })
                 .map_err(|e: Error| e.with_path(&path)),
-            Yaml::Hash(hash) => {
+            Node::Map(hash) => {
                 if hash.len() != 1 {
                     return Err(Error::new(format!(
                         "expected a map with exactly one key for enum, found {} keys",
@@ -174,7 +176,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
                     .with_path(&path));
                 }
                 let (key, value) = hash.into_iter().next().expect("length checked above");
-                let Yaml::String(variant) = key else {
+                let Node::Str(variant) = key else {
                     return Err(Error::new("expected a string enum variant name").with_path(&path));
                 };
                 let mut child_path = path.clone();
@@ -187,7 +189,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
                     })
                     .map_err(|e: Error| e.with_path(&path))
             }
-            Yaml::BadValue => Err(Error::bad_value(&path)),
+            Node::Bad => Err(Error::bad_value(&path)),
             _ => Err(Error::new("expected a string or single-key map for enum").with_path(&path)),
         }
     }
@@ -198,12 +200,12 @@ impl<'de> de::Deserializer<'de> for Deserializer {
 
     /// Plain numbers and booleans are accepted where a string is expected
     /// (`port: 8080` into a `String`, `200:` as a map key), like serde_yaml.
+    /// Integers keep the text they were written as (`0o17` reads as `"0o17"`).
     fn deserialize_str<V: Visitor<'de>>(self, visitor: V) -> Result<V::Value> {
         let Self { yaml, path } = self;
         let text = match yaml {
-            Yaml::Integer(i) => i.to_string(),
-            Yaml::Real(s) => s,
-            Yaml::Boolean(b) => b.to_string(),
+            Node::Int(_, s) | Node::Real(s) => s,
+            Node::Bool(b) => b.to_string(),
             other => return Self { yaml: other, path }.deserialize_any(visitor),
         };
         visitor
@@ -226,7 +228,7 @@ impl<'de> de::Deserializer<'de> for Deserializer {
 }
 
 struct SeqDeserializer {
-    iter: std::vec::IntoIter<Yaml>,
+    iter: std::vec::IntoIter<Node>,
     index: usize,
     path: Path,
 }
@@ -250,10 +252,10 @@ impl<'de> SeqAccess<'de> for &mut SeqDeserializer {
 }
 
 struct MapDeserializer {
-    iter: <Hash as IntoIterator>::IntoIter,
+    iter: std::vec::IntoIter<(Node, Node)>,
     remaining: usize,
     label: String,
-    value: Option<Yaml>,
+    value: Option<Node>,
     path: Path,
 }
 
@@ -288,7 +290,7 @@ impl<'de> MapAccess<'de> for &mut MapDeserializer {
 
 struct EnumDeserializer {
     variant: String,
-    value: Option<Yaml>,
+    value: Option<Node>,
     path: Path,
 }
 
@@ -309,7 +311,7 @@ impl<'de> EnumAccess<'de> for EnumDeserializer {
 }
 
 struct VariantDeserializer {
-    value: Option<Yaml>,
+    value: Option<Node>,
     path: Path,
 }
 
@@ -330,7 +332,7 @@ impl<'de> VariantAccess<'de> for VariantDeserializer {
 
     fn unit_variant(self) -> Result<()> {
         match self.value {
-            None | Some(Yaml::Null) => Ok(()),
+            None | Some(Node::Null) => Ok(()),
             Some(_) => {
                 Err(Error::new("expected a unit variant but found a value").with_path(&self.path))
             }

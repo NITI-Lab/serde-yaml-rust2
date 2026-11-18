@@ -15,6 +15,23 @@ This crate provides a serde integration with a `serde_yaml`-like API, built on *
 - **YAML 1.2** compliant via yaml-rust2's Core Schema
 - **Actively maintained**
 
+### Choosing a YAML crate
+
+If you are starting fresh, [`serde-saphyr`](https://crates.io/crates/serde-saphyr) is a good choice: it is also free of `unsafe` code, rejects duplicate keys with clear line/column errors, and quotes `yes`/`no` when writing.
+
+This crate is for code that already uses `serde_yaml` and wants to switch without rewriting: it keeps the same API, including `Value`, `Mapping`, and `Number`, which `serde-saphyr` does not have. Compared with [`yaml_serde`](https://crates.io/crates/yaml_serde), the maintained fork of `serde_yaml`, it also rejects duplicate keys for every target type and quotes YAML 1.1 booleans when writing.
+
+Checked with serde-saphyr 2.1.1, yaml_serde 0.10.7, and this crate:
+
+| | serde-saphyr | yaml_serde | serde-yaml-rust2 |
+| --- | --- | --- | --- |
+| Duplicate key read into a struct or `Value` | error | error | error |
+| Duplicate key read into a `BTreeMap`/`HashMap` | error | last value wins, no error | error |
+| `"yes"`, `"no"`, `"on"` written as | `"yes"` | `yes` (a boolean to YAML 1.1 parsers) | `'yes'` |
+| Sequence under a key written as | `tags:`<br>`- x` | `tags:`<br>`- x` | `tags:`<br>`  - x` |
+| `unsafe` code | `forbid(unsafe_code)` | uses `unsafe` (libyaml port) | `forbid(unsafe_code)` |
+| `Value` / `Mapping` types | no | yes | yes |
+
 ## Usage
 
 Add to your `Cargo.toml`:
@@ -215,7 +232,7 @@ YAML that you wrote with `serde_yaml` 0.9 and that contains tagged enum variants
 
 **Reading is lenient where `serde_yaml` users tend to expect it:**
 
-- Plain numbers and booleans are accepted where a string is expected, so `port: 8080` reads into a `String` and `200:` reads as a string map key (e.g. OpenAPI `responses`).
+- Plain numbers and booleans are accepted where a string is expected, so `port: 8080` reads into a `String` and `200:` reads as a string map key (e.g. OpenAPI `responses`). The string is the text as written: `mode: 0o17` reads as `"0o17"`, not `"15"`.
 - An empty input (or one with only comments) reads as `null`.
 - Duplicate keys in a mapping are an error, as the YAML spec requires.
 

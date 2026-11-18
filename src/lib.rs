@@ -39,6 +39,7 @@
 mod de;
 mod emit;
 mod error;
+mod load;
 mod mapping;
 mod number;
 pub(crate) mod path;
